@@ -1,16 +1,16 @@
 # Core Data Science Libraries
-pandas>=2.0.0,<3.0.0
-numpy>=1.24.0,<2.0.0
-scipy>=1.10.0,<2.0.0
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
 
 # Financial Data
 yfinance>=0.2.0
 pandas-datareader>=0.10.0
 
 # Machine Learning & Forecasting
-scikit-learn>=1.3.0,<2.0.0
+scikit-learn>=1.3.0
 prophet>=1.1.0
-statsmodels>=0.14.0,<1.0.0
+statsmodels>=0.14.0
 
 # Visualization
 plotly>=5.14.0
@@ -23,9 +23,6 @@ streamlit>=1.28.0
 # Data Processing & Analysis
 requests>=2.31.0
 beautifulsoup4>=4.12.0
-
-# Technical Analysis (ta library only - TA-Lib requires C dependencies)
-ta>=0.11.0
 
 # Utilities
 python-dotenv>=1.0.0
