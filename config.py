@@ -58,3 +58,38 @@ CONFIDENCE_INTERVAL = 0.95
 THEME_COLOR = "#1E88E5"
 APP_TITLE = "Fusion & Quantum Computing Stock Dashboard"
 APP_ICON = "⚛️"
+
+# --- Neurobird Search API -------------------------------------------------
+# Live web search / news research for the tracked tickers.
+# Set NEUROBIRD_KEY in your environment or in .streamlit/secrets.toml.
+# A free key (1,000 credits/month) can be provisioned with:
+#   python -c "import neurobird_search as n; print(n.create_api_key())"
+
+NEUROBIRD_BASE_URL = "https://search.neurobird.com"
+
+# Default search parameters (see neurobird_search.NeurobirdClient.web_search)
+NEWS_LOOKBACK_DAYS = 14        # only surface news from the last N days
+NEWS_MAX_RESULTS = 6           # results per news query
+RESEARCH_MAX_RESULTS = 8       # results per deep-dive query
+RESEARCH_SEARCH_DEPTH = "advanced"  # basic | standard | advanced
+
+# Cache research responses for this long to conserve API credits
+RESEARCH_CACHE_TTL = 900       # seconds
+
+# Domains that tend to carry low-signal, SEO-farmed stock content
+RESEARCH_EXCLUDE_DOMAINS = [
+    "stocktwits.com",
+    "investorshub.advfn.com",
+]
+
+# Sector-level research topics
+SECTOR_TOPICS = {
+    "Nuclear Fusion": (
+        "nuclear fusion energy industry commercial reactor milestones, "
+        "funding rounds and public company developments"
+    ),
+    "Quantum Computing": (
+        "quantum computing industry qubit milestones, error correction "
+        "breakthroughs, enterprise contracts and public company developments"
+    ),
+}

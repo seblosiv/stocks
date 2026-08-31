@@ -17,10 +17,12 @@ warnings.filterwarnings('ignore')
 from config import (
     FUSION_STOCKS, QUANTUM_STOCKS, ALL_STOCKS,
     BENCHMARK_INDICES, APP_TITLE, APP_ICON,
-    FORECAST_YEARS
+    FORECAST_YEARS, RESEARCH_CACHE_TTL, NEWS_LOOKBACK_DAYS
 )
 from data_collector import StockDataCollector
 from predictive_analysis import StockPredictor
+from market_research import StockResearcher
+from neurobird_search import NeurobirdClient, NeurobirdError, get_api_key
 
 # Page configuration
 st.set_page_config(
@@ -72,6 +74,100 @@ def load_stock_data(tickers, period="5y"):
     """Load stock data with caching"""
     collector = StockDataCollector(ALL_STOCKS)
     return collector.fetch_multiple_stocks(tickers, period)
+
+
+def resolve_neurobird_key():
+    """Neurobird API key from Streamlit secrets, falling back to the environment"""
+    try:
+        key = st.secrets.get("NEUROBIRD_KEY")
+        if key:
+            return key
+    except Exception:
+        # No secrets.toml configured - fall through to the environment
+        pass
+    return get_api_key()
+
+
+def get_researcher():
+    """Build a StockResearcher, or None when no API key is configured"""
+    key = resolve_neurobird_key()
+    if not key:
+        return None
+    return StockResearcher(client=NeurobirdClient(api_key=key))
+
+
+@st.cache_data(ttl=RESEARCH_CACHE_TTL, show_spinner=False)
+def run_research(kind, target, api_key):
+    """
+    Cached research call. `api_key` is part of the cache key so switching keys
+    re-runs the query; caching keeps repeated page views from burning credits.
+    """
+    researcher = StockResearcher(client=NeurobirdClient(api_key=api_key))
+    if kind == "news":
+        return researcher.news(target)
+    if kind == "deep_dive":
+        return researcher.deep_dive(target)
+    if kind == "sector":
+        return researcher.sector_briefing(target)
+    if kind == "ask":
+        return researcher.ask(target)
+    raise ValueError(f"Unknown research kind: {kind}")
+
+
+def render_research(payload):
+    """Render a normalized Neurobird search payload"""
+    answer = payload.get("answer")
+    results = payload.get("results", [])
+
+    if answer:
+        st.markdown("#### Summary")
+        st.info(answer)
+
+    if not results:
+        if not answer:
+            st.warning("No results returned for this query.")
+        return
+
+    st.markdown("#### Sources")
+    for item in results:
+        title = item.get("title") or "Untitled"
+        url = item.get("url") or ""
+        published = item.get("published")
+
+        header = f"**[{title}]({url})**" if url else f"**{title}**"
+        if published:
+            header += f"  \n*{published}*"
+        st.markdown(header)
+
+        content = (item.get("content") or "").strip()
+        if content:
+            excerpt = content if len(content) <= 1200 else content[:1200] + "..."
+            with st.expander("Show extracted passage"):
+                st.markdown(excerpt)
+        st.markdown("---")
+
+
+def research_section(kind, target, label, key_suffix=""):
+    """Button-gated research block so searches only run on demand"""
+    api_key = resolve_neurobird_key()
+
+    if not api_key:
+        st.info(
+            "Live research is powered by the Neurobird Search API. Set "
+            "`NEUROBIRD_KEY` in your environment or in `.streamlit/secrets.toml` "
+            "to enable it. A free key (1,000 credits/month) is available - see "
+            "the README."
+        )
+        return
+
+    if st.button(label, key=f"research_{kind}_{target}{key_suffix}"):
+        with st.spinner("Searching the live web..."):
+            try:
+                payload = run_research(kind, target, api_key)
+            except NeurobirdError as exc:
+                st.error(f"Neurobird search failed: {exc}")
+                return
+        render_research(payload)
 
 
 @st.cache_data(ttl=3600)
@@ -301,7 +397,8 @@ def main():
 
         page = st.radio(
             "Select Page:",
-            ["Overview", "Fusion Stocks", "Quantum Computing", "Stock Analysis", "Forecasting"]
+            ["Overview", "Fusion Stocks", "Quantum Computing", "Stock Analysis",
+             "Forecasting", "Market Research"]
         )
 
         st.markdown("---")
@@ -312,6 +409,13 @@ def main():
             ["1y", "2y", "5y", "10y", "max"],
             index=2
         )
+
+        st.markdown("---")
+        st.markdown("### Live Research")
+        if resolve_neurobird_key():
+            st.success("Neurobird Search API connected")
+        else:
+            st.caption("Set NEUROBIRD_KEY to enable live web research.")
 
         st.markdown("---")
         st.markdown("### About")
@@ -495,6 +599,17 @@ def main():
                 fig = plot_technical_indicators(df, selected_ticker)
                 st.plotly_chart(fig, use_container_width=True)
 
+                # Live news from the Neurobird Search API
+                st.markdown("---")
+                st.markdown(
+                    f"### Latest News (last {NEWS_LOOKBACK_DAYS} days)"
+                )
+                research_section(
+                    "news",
+                    selected_ticker,
+                    f"Fetch news for {selected_ticker}",
+                )
+
     # Forecasting Page
     elif page == "Forecasting":
         st.markdown("## 5-Year Stock Forecast")
@@ -590,6 +705,68 @@ def main():
 
                     else:
                         st.warning("Unable to generate forecast. Please try another stock.")
+
+    # Market Research Page
+    elif page == "Market Research":
+        st.markdown("## Live Market Research")
+        st.markdown(
+            "Web research powered by the [Neurobird Search API]"
+            "(https://search.neurobird.com), which returns ranked results with "
+            "the relevant page passages already extracted."
+        )
+
+        if not resolve_neurobird_key():
+            st.warning(
+                "No Neurobird API key configured. Set `NEUROBIRD_KEY` in your "
+                "environment or in `.streamlit/secrets.toml` to enable this page."
+            )
+            st.code(
+                'python -c "import neurobird_search as n; '
+                'print(n.create_api_key())"',
+                language="bash",
+            )
+        else:
+            tab1, tab2, tab3 = st.tabs(
+                ["Sector Briefings", "Company Deep Dive", "Ask Anything"]
+            )
+
+            with tab1:
+                sector = st.selectbox(
+                    "Sector:",
+                    ["Nuclear Fusion", "Quantum Computing"],
+                )
+                research_section(
+                    "sector", sector, f"Brief me on {sector}"
+                )
+
+            with tab2:
+                ticker = st.selectbox(
+                    "Company:",
+                    list(ALL_STOCKS.keys()),
+                    key="research_ticker",
+                )
+                st.caption(ALL_STOCKS.get(ticker, ""))
+                research_section(
+                    "deep_dive", ticker, f"Research {ticker}", key_suffix="_dd"
+                )
+
+            with tab3:
+                question = st.text_input(
+                    "Research question:",
+                    placeholder=(
+                        "e.g. Which fusion companies signed grid-scale power "
+                        "agreements this year?"
+                    ),
+                )
+                if question:
+                    research_section("ask", question, "Search")
+
+            st.markdown("---")
+            st.caption(
+                "Each search costs credits (1 for a standard search, 2 for an "
+                "advanced one, +1 when a grounded answer is included). Results "
+                f"are cached for {RESEARCH_CACHE_TTL // 60} minutes."
+            )
 
     # Footer
     st.markdown("---")

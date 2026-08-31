@@ -105,6 +105,78 @@ The dashboard will open in your default browser at `http://localhost:8501`
 3. **Quantum Computing**: Analysis of quantum computing sector stocks
 4. **Stock Analysis**: Detailed technical analysis for individual stocks
 5. **Forecasting**: 5-year predictions using ensemble ML models
+6. **Market Research**: Live web research (news, catalysts, sector briefings)
+   powered by the Neurobird Search API
+
+## Live Market Research (Neurobird Search API)
+
+The dashboard can pull live web research alongside the price data, using the
+[Neurobird Search API](https://search.neurobird.com). Search results come back
+with the relevant page passages already extracted, plus an optional grounded
+answer, so the dashboard shows real source text rather than SEO snippets.
+
+### Getting a key
+
+A free key carries 1,000 credits per month and needs no signup form:
+
+```bash
+python -c "import neurobird_search as n; print(n.create_api_key())"
+```
+
+Then make it available to the app, either through the environment:
+
+```bash
+export NEUROBIRD_KEY=nb_your_key_here
+```
+
+or through `.streamlit/secrets.toml` (preferred for Streamlit Cloud):
+
+```toml
+NEUROBIRD_KEY = "nb_your_key_here"
+```
+
+The sidebar shows **Neurobird Search API connected** once the key is picked up.
+Without a key the dashboard runs exactly as before; the research features simply
+show a setup hint.
+
+### What it adds
+
+- **Stock Analysis page**: latest news for the selected ticker, filtered to the
+  last 14 days
+- **Market Research page**: sector briefings for fusion and quantum computing,
+  per-company deep dives (catalysts, risks, analyst targets), and a free-form
+  research box
+
+### Credit cost
+
+| Action | Credits |
+| --- | --- |
+| Basic / standard search | 1 |
+| Advanced search | 2 |
+| Grounded answer | +1 |
+| URL extraction | 1 per page |
+
+Searches only run when you click the button, and responses are cached for 15
+minutes (`RESEARCH_CACHE_TTL` in `config.py`) so revisiting a page does not
+re-spend credits.
+
+### Using the client directly
+
+```python
+from neurobird_search import NeurobirdClient
+from market_research import StockResearcher
+
+researcher = StockResearcher(client=NeurobirdClient())
+
+news = researcher.news("IONQ")
+print(news["answer"])
+for item in news["results"]:
+    print(item["title"], item["url"])
+
+# Any question, and full-text extraction of a source
+answer = researcher.ask("Which fusion startups signed grid-scale PPAs in 2026?")
+article = researcher.read_article("https://example.com/story")
+```
 
 ## Stock Coverage
 
@@ -141,6 +213,9 @@ stocks/
 ├── config.py                 # Configuration and stock lists
 ├── data_collector.py         # Stock data fetching and processing
 ├── predictive_analysis.py    # ML forecasting models
+├── neurobird_search.py       # Neurobird Search API client
+├── market_research.py        # Ticker-aware research queries
+├── .env.example              # Environment variable template
 ├── requirements.txt          # Python dependencies
 └── README.md                # This file
 ```
